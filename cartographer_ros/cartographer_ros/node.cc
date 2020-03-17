@@ -42,6 +42,8 @@
 #include "sensor_msgs/PointCloud2.h"
 #include "tf2_eigen/tf2_eigen.h"
 #include "visualization_msgs/MarkerArray.h"
+#include "geometry_msgs/PoseStamped.h"
+
 
 namespace cartographer_ros {
 
@@ -101,6 +103,9 @@ Node::Node(
   constraint_list_publisher_ =
       node_handle_.advertise<::visualization_msgs::MarkerArray>(
           kConstraintListTopic, kLatestOnlyPublisherQueueSize);
+  tracked_pose_in_map_publisher_ =
+      node_handle_.advertise<::geometry_msgs::PoseStamped>(
+          kTrackedPoseTopic, kLatestOnlyPublisherQueueSize);
   service_servers_.push_back(node_handle_.advertiseService(
       kSubmapQueryServiceName, &Node::HandleSubmapQuery, this));
   service_servers_.push_back(node_handle_.advertiseService(
@@ -229,32 +234,41 @@ void Node::PublishTrajectoryStates(const ::ros::WallTimerEvent& timer_event) {
         trajectory_state.local_to_map * tracking_to_local;
 
     if (trajectory_state.published_to_tracking != nullptr) {
-      if (trajectory_state.trajectory_options.provide_odom_frame) {
-        std::vector<geometry_msgs::TransformStamped> stamped_transforms;
+      if (node_options_.publish_to_tf) {
+        if (trajectory_state.trajectory_options.provide_odom_frame) {
+          std::vector<geometry_msgs::TransformStamped> stamped_transforms;
 
-        stamped_transform.header.frame_id = node_options_.map_frame;
-        stamped_transform.child_frame_id =
-            trajectory_state.trajectory_options.odom_frame;
-        stamped_transform.transform =
-            ToGeometryMsgTransform(trajectory_state.local_to_map);
-        stamped_transforms.push_back(stamped_transform);
+          stamped_transform.header.frame_id = node_options_.map_frame;
+          stamped_transform.child_frame_id =
+              trajectory_state.trajectory_options.odom_frame;
+          stamped_transform.transform =
+              ToGeometryMsgTransform(trajectory_state.local_to_map);
+          stamped_transforms.push_back(stamped_transform);
 
-        stamped_transform.header.frame_id =
-            trajectory_state.trajectory_options.odom_frame;
-        stamped_transform.child_frame_id =
-            trajectory_state.trajectory_options.published_frame;
-        stamped_transform.transform = ToGeometryMsgTransform(
-            tracking_to_local * (*trajectory_state.published_to_tracking));
-        stamped_transforms.push_back(stamped_transform);
+          stamped_transform.header.frame_id =
+              trajectory_state.trajectory_options.odom_frame;
+          stamped_transform.child_frame_id =
+              trajectory_state.trajectory_options.published_frame;
+          stamped_transform.transform = ToGeometryMsgTransform(
+              tracking_to_local * (*trajectory_state.published_to_tracking));
+          stamped_transforms.push_back(stamped_transform);
 
-        tf_broadcaster_.sendTransform(stamped_transforms);
-      } else {
-        stamped_transform.header.frame_id = node_options_.map_frame;
-        stamped_transform.child_frame_id =
-            trajectory_state.trajectory_options.published_frame;
-        stamped_transform.transform = ToGeometryMsgTransform(
-            tracking_to_map * (*trajectory_state.published_to_tracking));
-        tf_broadcaster_.sendTransform(stamped_transform);
+          tf_broadcaster_.sendTransform(stamped_transforms);
+        } else {
+          stamped_transform.header.frame_id = node_options_.map_frame;
+          stamped_transform.child_frame_id =
+              trajectory_state.trajectory_options.published_frame;
+          stamped_transform.transform = ToGeometryMsgTransform(
+              tracking_to_map * (*trajectory_state.published_to_tracking));
+          tf_broadcaster_.sendTransform(stamped_transform);
+        }
+      }
+      if (node_options_.publish_tracked_pose_msg) {
+        ::geometry_msgs::PoseStamped pose_msg;
+        pose_msg.header.frame_id = node_options_.map_frame;
+        pose_msg.header.stamp = stamped_transform.header.stamp;
+        pose_msg.pose = ToGeometryMsgPose(tracking_to_map);
+        tracked_pose_in_map_publisher_.publish(pose_msg);
       }
     }
   }

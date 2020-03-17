@@ -40,6 +40,8 @@ constexpr char kWriteStateServiceName[] = "write_state";
 constexpr char kTrajectoryNodeListTopic[] = "trajectory_node_list";
 constexpr char kLandmarkPosesListTopic[] = "landmark_poses_list";
 constexpr char kConstraintListTopic[] = "constraint_list";
+constexpr char kTrackedPoseTopic[] = "tracked_pose";
+
 constexpr double kConstraintPublishPeriodSec = 0.5;
 
 constexpr int kInfiniteSubscriberQueueSize = 0;
