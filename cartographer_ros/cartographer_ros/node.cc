@@ -42,7 +42,7 @@
 #include "sensor_msgs/PointCloud2.h"
 #include "tf2_eigen/tf2_eigen.h"
 #include "visualization_msgs/MarkerArray.h"
-#include "geometry_msgs/PoseStamped.h"
+#include "geometry_msgs/PoseWithCovarianceStamped.h"
 
 
 namespace cartographer_ros {
@@ -104,7 +104,7 @@ Node::Node(
       node_handle_.advertise<::visualization_msgs::MarkerArray>(
           kConstraintListTopic, kLatestOnlyPublisherQueueSize);
   tracked_pose_in_map_publisher_ =
-      node_handle_.advertise<::geometry_msgs::PoseStamped>(
+      node_handle_.advertise<::geometry_msgs::PoseWithCovarianceStamped>(
           kTrackedPoseTopic, kLatestOnlyPublisherQueueSize);
   service_servers_.push_back(node_handle_.advertiseService(
       kSubmapQueryServiceName, &Node::HandleSubmapQuery, this));
@@ -134,6 +134,8 @@ Node::Node(
   wall_timers_.push_back(node_handle_.createWallTimer(
       ::ros::WallDuration(kConstraintPublishPeriodSec),
       &Node::PublishConstraintList, this));
+
+
 }
 
 Node::~Node() { FinishAllTrajectories(); }
@@ -264,10 +266,15 @@ void Node::PublishTrajectoryStates(const ::ros::WallTimerEvent& timer_event) {
         }
       }
       if (node_options_.publish_tracked_pose_msg) {
-        ::geometry_msgs::PoseStamped pose_msg;
+        ::geometry_msgs::PoseWithCovarianceStamped pose_msg;
         pose_msg.header.frame_id = node_options_.map_frame;
         pose_msg.header.stamp = stamped_transform.header.stamp;
-        pose_msg.pose = ToGeometryMsgPose(tracking_to_map);
+        pose_msg.pose.pose = ToGeometryMsgPose(tracking_to_map);
+        //std::vector<double> vec(cov, cov+36);
+        //pose_msg.pose.covariance = vec;
+        for(int i=0;i<6;i++){
+          pose_msg.pose.covariance[7*i] = 0.01;
+        }
         tracked_pose_in_map_publisher_.publish(pose_msg);
       }
     }
